@@ -2,9 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CrisisLevel, CrisisResources, Lang, Mode, Passage, SearchResponse, StyleId, TeachEvent, TranslationId } from "@/lib/types";
 import { STYLES, TRANSLATIONS } from "@/lib/types";
-import { useSpeaker, useSpeechInput } from "@/lib/client/speech";
-import { CrisisCard, IconButton, PassageCard, SpeakButton, TeachingBody, passageSpeech } from "./Cards";
-import { CheckIcon, CopyIcon, Mark, MicIcon, SendIcon } from "./Icons";
+import { useSpeechInput } from "@/lib/client/speech";
+import { useVoice, type Voice } from "@/lib/client/voice";
+import { useMusicBed } from "@/lib/client/music";
+import { CrisisCard, IconButton, PassageCard, SpeakButton, TeachingBody, passageSpeech, type Speaker } from "./Cards";
+import { Player } from "./Player";
+import { CheckIcon, CopyIcon, Mark, MicIcon, MusicIcon, SendIcon, TranscriptIcon } from "./Icons";
 
 interface Entry {
   id: string;
@@ -52,7 +55,21 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
-  const speaker = useSpeaker();
+  const voice = useVoice();
+  const music = useMusicBed();
+  // Verse cards use a simple play/stop button on top of the same voice engine.
+  const speaker: Speaker = {
+    speakingId: voice.state && voice.state.status !== "paused" ? voice.state.id : null,
+    loadingId: voice.state?.status === "loading" ? voice.state.id : null,
+    speak: (id, text, lang) => voice.play(id, text, lang),
+    stop: voice.stop,
+  };
+
+  // Soft keys play only while a teaching (not a single verse) is playing or being prepared.
+  const preaching = Boolean(voice.state?.id.startsWith("t-") && voice.state.status !== "paused");
+  useEffect(() => {
+    if (!preaching) music.stop();
+  }, [preaching, music.stop]);
   const voiceBase = useRef("");
   const mic = useSpeechInput((t) => setInput((voiceBase.current ? voiceBase.current + " " : "") + t));
 
@@ -125,7 +142,7 @@ export default function App() {
     const message = (raw ?? input).trim();
     if (message.length < 2 || busy) return;
     if (mic.listening) mic.stop();
-    speaker.stop();
+    voice.stop();
     setInput("");
     voiceBase.current = "";
     const id = crypto.randomUUID();
@@ -284,7 +301,7 @@ export default function App() {
         ) : (
           <div className="space-y-10 pt-6">
             {entries.map((e) => (
-              <EntryView key={e.id} entry={e} speaker={speaker} />
+              <EntryView key={e.id} entry={e} speaker={speaker} voice={voice} music={music} />
             ))}
           </div>
         )}
@@ -346,8 +363,35 @@ export default function App() {
   );
 }
 
-function EntryView({ entry: e, speaker }: { entry: Entry; speaker: ReturnType<typeof useSpeaker> }) {
+function EntryView({
+  entry: e,
+  speaker,
+  voice,
+  music,
+}: {
+  entry: Entry;
+  speaker: Speaker;
+  voice: Voice;
+  music: ReturnType<typeof useMusicBed>;
+}) {
+  const fr = e.lang === "fr";
+  const teachingId = `t-${e.id}`;
+  // Start the keys in the same tap as the voice: browsers only allow sound after a user gesture.
+  const preach = (id: string, text: string, lang?: Lang) => {
+    music.start();
+    speaker.speak(id, text, lang);
+  };
+  const onAir = voice.state?.id === teachingId && voice.state.status !== "paused";
   const [copied, setCopied] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  // With a natural voice, the teaching is delivered as audio; the text sits behind "Show transcript".
+  const audioFirst = voice.natural;
+  const ready = e.status === "done" && Boolean(e.teaching);
+  // A free voice (Kokoro) records as soon as the teaching is written, so Play is instant.
+  useEffect(() => {
+    if (audioFirst && voice.free && ready) voice.preload(teachingId, teachingSpeech(), e.lang);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioFirst, voice.free, ready]);
   const urgent = e.crisis === "urgent" && e.resources;
   const teachingSpeech = () => {
     const body = e.teaching.replace(/DECLARATION:\s*/i, "");
@@ -383,12 +427,44 @@ function EntryView({ entry: e, speaker }: { entry: Entry; speaker: ReturnType<ty
             </h2>
           </div>
           <PassageCard passage={e.anchor} variant="anchor" />
-          {(e.teaching || e.status === "streaming") && (
+          {audioFirst && e.status === "streaming" && (
+            <p className="caret text-muted">{fr ? "Le prédicateur prépare ta parole" : "The preacher is preparing your word"}</p>
+          )}
+          {audioFirst && e.status === "done" && e.teaching && (
+            <Player id={teachingId} text={teachingSpeech()} lang={e.lang} voice={voice} onPlayStart={() => music.start()} />
+          )}
+          {(audioFirst ? showTranscript : e.teaching || e.status === "streaming") && (
             <TeachingBody text={e.teaching} streaming={e.status === "streaming"} translation={e.translation} />
           )}
           {e.status === "done" && e.teaching && (
             <div className="flex flex-wrap items-center gap-1 border-t border-line pt-3">
-              <SpeakButton id={`t-${e.id}`} text={teachingSpeech()} lang={e.lang} {...speaker} label={e.lang === "fr" ? "Écouter cette parole" : "Listen to this word"} />
+              {audioFirst ? (
+                <IconButton label={showTranscript ? (fr ? "Masquer le texte" : "Hide transcript") : fr ? "Voir le texte" : "Show transcript"} active={showTranscript} onClick={() => setShowTranscript((v) => !v)}>
+                  <TranscriptIcon className="h-4 w-4" />
+                  <span>{showTranscript ? (fr ? "Masquer le texte" : "Hide transcript") : fr ? "Voir le texte" : "Show transcript"}</span>
+                </IconButton>
+              ) : (
+                <SpeakButton
+                  id={teachingId}
+                  text={teachingSpeech()}
+                  lang={e.lang}
+                  {...speaker}
+                  speak={preach}
+                  label={fr ? "Écouter cette parole" : "Listen to this word"}
+                />
+              )}
+              <IconButton
+                label={music.enabled ? (fr ? "Couper la musique de fond" : "Turn background keys off") : fr ? "Activer la musique de fond" : "Turn background keys on"}
+                active={false}
+                onClick={() => {
+                  const on = !music.enabled;
+                  music.setEnabled(on);
+                  if (!on) music.stop();
+                }}
+              >
+                <MusicIcon className={`h-4 w-4 ${music.enabled ? "" : "opacity-40"}`} />
+                <span className={music.enabled ? "" : "line-through opacity-60"}>{fr ? "Musique" : "Keys"}</span>
+              </IconButton>
               <IconButton
                 label="Copy teaching"
                 onClick={async () => {
@@ -404,6 +480,7 @@ function EntryView({ entry: e, speaker }: { entry: Entry; speaker: ReturnType<ty
               </IconButton>
             </div>
           )}
+          {onAir && music.nowPlaying && <p className="text-xs text-muted">♪ {music.nowPlaying}</p>}
           {e.passages.length > 0 && (e.status === "done" || e.status === "error") && (
             <details className="group">
               <summary className="cursor-pointer list-none text-sm font-medium text-muted hover:text-ink">

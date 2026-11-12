@@ -7,7 +7,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "build:bible": "node scripts/build-bible.mjs"
+    "build:bible": "node scripts/build-bible.mjs",
+    "voice": "voice-service/.venv/bin/python voice-service/server.py",
+    "voice:setup": "cd voice-service && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt && sh download-models.sh"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",

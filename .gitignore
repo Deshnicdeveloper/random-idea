@@ -6,3 +6,7 @@ node_modules
 next-env.d.ts
 .model-cache
 voice-samples
+.cache
+voice-service/.venv
+voice-service/models
+__pycache__
