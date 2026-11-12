@@ -11,8 +11,8 @@ encoded as a 64 kbps mono MP3 (about 0.5 MB per minute).
 import json
 import os
 import re
-import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -34,7 +34,11 @@ LANGS = {"en-us", "en-gb", "fr-fr"}
 print(f"Loading Kokoro from {MODEL.name} ...", flush=True)
 kokoro = Kokoro(str(MODEL), str(VOICES))
 VOICE_LIST = sorted(kokoro.get_voices())
-lock = threading.Lock()  # one synthesis at a time keeps CPU use predictable
+# All synthesis runs on ONE long-lived thread. The speech engine pays ~3 s of setup on every new thread,
+# so a fresh thread per request made short sentences take ~3.4 s instead of ~0.7 s. One worker also
+# keeps requests strictly first-come, first-served and CPU use predictable.
+worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="kokoro")
+worker.submit(kokoro.create, "Warm up.", voice="am_michael", lang="en-us").result()
 print(f"Ready: {len(VOICE_LIST)} voices on http://{HOST}:{PORT}", flush=True)
 
 
@@ -61,12 +65,12 @@ def synthesize(text: str, voice: str, lang: str, speed: float, pause_after: bool
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     chunks: list[np.ndarray] = []
     sample_rate = 24000
-    with lock:
-        for i, para in enumerate(paragraphs):
-            samples, sample_rate = kokoro.create(para, voice=voice_style(voice), speed=speed, lang=lang)
-            chunks.append(samples)
-            if i < len(paragraphs) - 1 or pause_after:
-                chunks.append(np.zeros(int(sample_rate * PARAGRAPH_PAUSE), dtype=np.float32))
+    # Runs on the single worker thread (see `worker`).
+    for i, para in enumerate(paragraphs):
+        samples, sample_rate = kokoro.create(para, voice=voice_style(voice), speed=speed, lang=lang)
+        chunks.append(samples)
+        if i < len(paragraphs) - 1 or pause_after:
+            chunks.append(np.zeros(int(sample_rate * PARAGRAPH_PAUSE), dtype=np.float32))
     audio = np.concatenate(chunks) if chunks else np.zeros(1, dtype=np.float32)
     pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
     enc = lameenc.Encoder()
@@ -112,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": f"lang must be one of {sorted(LANGS)}"})
         started = time.time()
         try:
-            mp3, seconds = synthesize(text, voice, lang, max(0.5, min(speed, 1.5)), bool(body.get("pause_after")))
+            mp3, seconds = worker.submit(synthesize, text, voice, lang, max(0.5, min(speed, 1.5)), bool(body.get("pause_after"))).result()
         except Exception as err:  # keep the service alive on a bad input
             print(f"synthesis failed: {err}", flush=True)
             return self._json(500, {"error": "synthesis failed"})

@@ -1,23 +1,27 @@
 {
-  "name": "scripture-preacher",
+  "name": "selah",
   "version": "0.1.0",
+  "description": "Tell it how you feel. Find the exact scripture, hear a two-minute word, talk with a pastor, or put every verse on screen during a live sermon.",
+  "license": "MIT",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Deshnicdeveloper/random-idea.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "setup": "sh scripts/download-bible.sh && npm run build:bible",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "build:bible": "node scripts/build-bible.mjs",
     "voice": "voice-service/.venv/bin/python voice-service/server.py",
-    "voice:setup": "cd voice-service && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt && sh download-models.sh"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.5",
-    "@types/node": "^26.6.6",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "tailwindcss": "^4.3.5",
-    "typescript": "^5.9.3"
+    "voice:setup": "cd voice-service && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt && sh download-models.sh",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
@@ -25,5 +29,14 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
   }
 }

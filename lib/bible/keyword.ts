@@ -180,3 +180,77 @@ export function keywordSearch(query: string, opts: { limit?: number; expand?: bo
       return { book: Math.floor(l / 1e6), chapter: Math.floor((l % 1e6) / 1e3), verse: l % 1e3, score, coverage, terms: weights.size };
     });
 }
+
+export interface QuoteMatch {
+  book: number;
+  chapter: number;
+  verse: number;
+  hits: number; // word pairs of the verse heard, in order
+  fraction: number; // share of the verse's word pairs heard
+  run: number; // longest stretch of the verse heard word for word
+}
+
+const normWords = (s: string) =>
+  fold(s)
+    .replace(/[’']/g, "")
+    .split(/[^a-z]+/)
+    .filter(Boolean)
+    .map((w) => ARCHAIC[w] ?? w);
+
+/** Longest run of consecutive verse words that also appears consecutively in the speech (content words only counted). */
+function longestRun(verse: string[], speech: string[]): number {
+  let best = 0;
+  const prev = new Array(speech.length + 1).fill(0);
+  for (let i = 1; i <= verse.length; i++) {
+    let diag = 0;
+    for (let j = 1; j <= speech.length; j++) {
+      const tmp = prev[j];
+      prev[j] = verse[i - 1] === speech[j - 1] ? diag + 1 : 0;
+      if (prev[j] > best) {
+        const run = verse.slice(i - prev[j], i);
+        if (run.filter((w) => !STOP.has(w)).length >= 3) best = prev[j];
+      }
+      diag = tmp;
+    }
+  }
+  return best;
+}
+
+/**
+ * Recognises a verse being quoted aloud in a stretch of live speech (no reference given).
+ * Strict on purpose: a large share of the verse's own word pairs must have been spoken, in any of the
+ * indexed translations, so everyday phrases don't trigger it.
+ */
+export function quoteMatch(speech: string): QuoteMatch | null {
+  const words = fold(speech).split(/[^a-z]+/).filter(Boolean);
+  if (words.length < 5) return null;
+  const heard = bigrams(speech);
+  const heardWords = normWords(speech);
+  const text = bibleText();
+  let best: QuoteMatch | null = null;
+  const scores = new Map<string, number>(); // best score per verse, to spot formulaic phrases
+  for (const h of keywordSearch(speech, { limit: 25 })) {
+    const bi = h.book, ci = h.chapter - 1, vi = h.verse - 1;
+    for (const version of [text.KJV, text.BSB, text.LSG]) {
+      const verse = version[bi]?.[ci]?.[vi];
+      if (!verse) continue;
+      const vb = bigrams(verse);
+      if (vb.size < 3) continue;
+      let hits = 0;
+      for (const x of vb) if (heard.has(x)) hits++;
+      const fraction = hits / vb.size;
+      const run = longestRun(normWords(verse), heardWords);
+      const score = Math.max(hits, run * 1.5) + fraction;
+      const bestScore = best ? Math.max(best.hits, best.run * 1.5) + best.fraction : -1;
+      const id = `${bi}:${h.chapter}:${h.verse}`;
+      scores.set(id, Math.max(scores.get(id) ?? 0, score));
+      if (score > bestScore) best = { book: bi, chapter: h.chapter, verse: h.verse, hits, fraction, run };
+    }
+  }
+  if (!best) return null;
+  if (!((best.hits >= 5 && best.fraction >= 0.4) || best.hits >= 9 || best.run >= 7)) return null;
+  // Formulaic lines ("the word of the Lord came unto me, saying") fit many verses equally: show none.
+  const top = Math.max(best.hits, best.run * 1.5) + best.fraction;
+  const rivals = [...scores.values()].filter((v) => v >= top - 1).length - 1;
+  return rivals >= 2 ? null : best;
+}
