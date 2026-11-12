@@ -1,13 +1,18 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CrisisLevel, CrisisResources, Lang, Mode, Passage, SearchResponse, StyleId, TeachEvent, TranslationId } from "@/lib/types";
 import { STYLES, TRANSLATIONS } from "@/lib/types";
 import { useSpeechInput } from "@/lib/client/speech";
 import { useVoice, type Voice } from "@/lib/client/voice";
 import { useMusicBed } from "@/lib/client/music";
-import { CrisisCard, IconButton, PassageCard, SpeakButton, TeachingBody, passageSpeech, type Speaker } from "./Cards";
+import { CrisisCard, IconButton, PassageCard, Skeleton, SpeakButton, TeachingBody, passageSpeech, type Speaker } from "./Cards";
+import { Select, TabBar, TopBar } from "./Shell";
 import { Player } from "./Player";
-import { CheckIcon, CopyIcon, Mark, MicIcon, MusicIcon, SendIcon, TranscriptIcon } from "./Icons";
+import {
+  ArrowIcon, CheckIcon, ChevronIcon, CopyIcon, DropIcon, HandsIcon, HourglassIcon, MicIcon, MoonIcon, MusicIcon,
+  SearchIcon, SendIcon, ServiceIcon, SunriseIcon, TalkIcon, TranscriptIcon, WaveIcon,
+} from "./Icons";
 
 interface Entry {
   id: string;
@@ -26,14 +31,6 @@ interface Entry {
   notice?: string;
   error?: string;
 }
-
-const SUGGESTIONS = [
-  "I'm anxious about my exams and I can't sleep",
-  "Something about God fighting my battles while I stay still",
-  "I've been waiting so long and nothing is moving in my life",
-  "I failed again and I don't know how to start over",
-  "Psalm 91",
-];
 
 const PREFS_KEY = "selah:prefs";
 
@@ -74,6 +71,11 @@ export default function App() {
   const mic = useSpeechInput((t) => setInput((voiceBase.current ? voiceBase.current + " " : "") + t));
 
   const [prefsReady, setPrefsReady] = useState(false);
+  const [greeting, setGreeting] = useState("");
+  useEffect(() => {
+    const h = new Date().getHours();
+    setGreeting(h < 5 ? "Still awake?" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
+  }, []);
 
   useEffect(() => {
     const p = loadPrefs();
@@ -221,147 +223,269 @@ export default function App() {
   };
 
   const empty = entries.length === 0;
+  const preacher = mode === "preacher";
+
+  const askFromTile = (text: string) => submit(text);
+  const rememberVerse = () => {
+    setMode("scripture");
+    requestAnimationFrame(() => textRef.current?.focus());
+  };
+
+  const segmented = (
+    <div role="tablist" aria-label="What you want" className="inline-flex rounded-[12px] bg-surface-2 p-1">
+      {(["preacher", "scripture"] as Mode[]).map((m) => (
+        <button
+          key={m}
+          type="button"
+          role="tab"
+          aria-selected={mode === m}
+          onClick={() => setMode(m)}
+          className={`h-8 rounded-[9px] px-3.5 text-[14px] font-medium transition-colors duration-150 ${
+            mode === m ? "bg-ink text-bg" : "text-muted hover:text-ink"
+          }`}
+        >
+          {m === "preacher" ? "Teaching" : "Verses"}
+        </button>
+      ))}
+    </div>
+  );
+
+  const styleMenu = preacher && (
+    <Select
+      className="min-w-0 flex-1 sm:flex-none"
+      label="Teaching style"
+      value={style}
+      onChange={setStyle}
+      options={Object.values(STYLES).map((s) => ({ value: s.id, label: s.label }))}
+    />
+  );
+
+  const micButton = (
+    <button
+      type="button"
+      onClick={toggleMic}
+      disabled={!mic.supported}
+      aria-label={mic.listening ? "Stop listening" : "Speak instead of typing"}
+      title={mic.supported ? (mic.listening ? "Stop listening" : "Speak instead of typing") : "Voice input works in Chrome, Edge and Safari"}
+      className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-colors duration-150 disabled:opacity-40 ${
+        mic.listening ? "listening bg-accent text-accent-ink" : "bg-surface-2 text-ink hover:bg-accent-soft"
+      }`}
+    >
+      <MicIcon className="h-[18px] w-[18px]" />
+    </button>
+  );
+
+  const placeholder = mic.listening
+    ? "Listening… speak freely"
+    : preacher
+      ? "Tell me what you're going through…"
+      : "Describe a feeling, or the part of a verse you remember…";
+
+  const field = (rows: number, cls: string) => (
+    <textarea
+      ref={textRef}
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          submit();
+        }
+      }}
+      rows={rows}
+      placeholder={placeholder}
+      aria-label={placeholder}
+      className={`w-full resize-none bg-transparent text-ink outline-none placeholder:text-muted ${cls}`}
+    />
+  );
+
+  const sendDisabled = busy || input.trim().length < 2;
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <div className="glow pointer-events-none fixed inset-x-0 top-0 h-80" />
+      <TopBar
+        active="word"
+        right={
+          <Select
+            label="Bible translation"
+            value={translation}
+            onChange={changeTranslation}
+            options={Object.values(TRANSLATIONS).map((t) => ({ value: t.id, label: t.lang === "fr" ? `${t.id} · Français` : t.id }))}
+          />
+        }
+      />
 
-      <header className="sticky top-0 z-20 border-b border-line/70 bg-bg/85 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Mark />
-            <span className="font-serif text-xl tracking-tight">Selah</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-full border border-line bg-surface p-1 text-sm" role="tablist" aria-label="Mode">
-              {(["preacher", "scripture"] as Mode[]).map((m) => (
-                <button
-                  key={m}
-                  role="tab"
-                  aria-selected={mode === m}
-                  onClick={() => setMode(m)}
-                  className={`rounded-full px-3 py-1.5 font-medium transition-colors ${mode === m ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"}`}
-                >
-                  {m === "preacher" ? "Preacher" : "Scripture"}
-                </button>
-              ))}
-            </div>
-            <select
-              aria-label="Bible translation"
-              value={translation}
-              onChange={(e) => changeTranslation(e.target.value as TranslationId)}
-              className="h-9 rounded-full border border-line bg-surface px-3 text-sm text-ink"
-            >
-              {Object.values(TRANSLATIONS).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.lang === "fr" ? `${t.id} · FR` : t.id}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {mode === "preacher" && (
-          <div className="no-scrollbar mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 pb-3">
-            {Object.values(STYLES).map((s) => (
-              <button
-                key={s.id}
-                onClick={() => setStyle(s.id)}
-                title={s.blurb}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                  style === s.id ? "border-accent bg-accent-soft text-ink" : "border-line text-muted hover:text-ink"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </header>
-
-      <main className="relative mx-auto w-full max-w-3xl flex-1 px-4 pb-48">
-        {empty ? (
-          <section className="pt-16 text-center sm:pt-24">
-            <h1 className="font-serif text-4xl leading-tight tracking-tight sm:text-5xl">What&apos;s on your heart?</h1>
-            <p className="mx-auto mt-4 max-w-md leading-relaxed text-muted">
-              Tell me how you feel, or the part of a verse you remember. I&apos;ll find the scripture
-              {mode === "preacher" ? " and bring you a short word from it." : "."}
+      {empty ? (
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-28 pt-10 sm:px-6 sm:pt-16 md:pb-16">
+          {/* Anchor */}
+          <section className="fade-up">
+            <p className="text-[14px] font-medium text-muted">{greeting || " "}</p>
+            <h1 className="mt-2 text-[30px] font-semibold leading-[38px] tracking-[-0.02em] sm:text-[44px] sm:leading-[52px]">
+              What&apos;s on your heart?
+            </h1>
+            <p className="mt-3 max-w-xl text-[16px] leading-[1.7] text-muted">
+              Say how you feel, or the part of a verse you remember. Selah finds the exact scripture
+              {preacher ? " and brings you a two-minute word, read aloud." : "."}
             </p>
-            <div className="mx-auto mt-8 flex max-w-xl flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+              className="mt-8 rounded-[24px] border border-line bg-surface p-3 shadow-float sm:p-4"
+            >
+              {field(3, "min-h-[92px] px-2 pt-1 text-[17px] leading-[1.6]")}
+              <div className="mt-2 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 items-center gap-2">
+                  {segmented}
+                  {styleMenu}
+                </div>
+                <div className="flex items-center gap-2 sm:ml-auto">
+                  {micButton}
+                  <button
+                    type="submit"
+                    disabled={sendDisabled}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[12px] bg-accent px-4 text-[15px] font-medium text-accent-ink transition duration-150 hover:-translate-y-px hover:shadow-card active:scale-[0.98] disabled:translate-y-0 disabled:bg-surface-2 disabled:text-muted disabled:shadow-none sm:h-10 sm:flex-none"
+                  >
+                    {preacher ? "Receive a word" : "Find verses"}
+                    <ArrowIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </form>
+            {mic.error && <p className="mt-3 text-[14px] text-care">{mic.error}</p>}
+            <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted">
+              <span>Exact scripture, never invented</span>
+              <span aria-hidden>·</span>
+              <span>KJV, BSB, Louis Segond</span>
+              <span aria-hidden>·</span>
+              <span>English &amp; Français</span>
+            </p>
+          </section>
+
+          {/* Start where you are */}
+          <section className="mt-14">
+            <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-emphasis">Start where you are</p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {TOPICS.map(({ title, line, ask, Icon }) => (
                 <button
-                  key={s}
-                  onClick={() => submit(s)}
-                  className="rounded-full border border-line bg-surface px-4 py-2 text-sm text-muted transition-colors hover:border-accent/50 hover:text-ink"
+                  key={title}
+                  onClick={() => askFromTile(ask)}
+                  className="group flex flex-col items-start gap-3 rounded-[16px] border border-line bg-surface p-4 text-left shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-emphasis/40"
                 >
-                  {s}
+                  <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-accent-soft text-emphasis">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-[15px] font-semibold">{title}</span>
+                    <span className="mt-0.5 block text-[13px] leading-[1.5] text-muted">{line}</span>
+                  </span>
                 </button>
+              ))}
+              <button
+                onClick={rememberVerse}
+                className="col-span-2 flex items-center gap-4 rounded-[16px] border border-dashed border-line p-4 text-left transition-colors duration-200 hover:border-emphasis/50 sm:col-span-3"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-surface-2 text-emphasis">
+                  <SearchIcon className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-[15px] font-semibold">Remember part of a verse?</span>
+                  <span className="block text-[13px] text-muted">Type the words you recall. &ldquo;Something about wings like eagles&rdquo; is enough.</span>
+                </span>
+              </button>
+            </div>
+          </section>
+
+          {/* More ways */}
+          <section className="mt-14">
+            <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-emphasis">More ways to use Selah</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {FEATURES.map(({ href, title, line, Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="group flex items-start gap-4 rounded-[20px] border border-line bg-surface p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-emphasis/40"
+                >
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-ink text-bg">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-[16px] font-semibold">{title}</span>
+                    <span className="mt-1 block text-[14px] leading-[1.6] text-muted">{line}</span>
+                  </span>
+                  <ArrowIcon className="mt-1 h-5 w-5 text-muted transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-ink" />
+                </Link>
               ))}
             </div>
           </section>
-        ) : (
-          <div className="space-y-10 pt-6">
-            {entries.map((e) => (
-              <EntryView key={e.id} entry={e} speaker={speaker} voice={voice} music={music} />
-            ))}
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </main>
 
-      <footer className="fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-bg via-bg to-bg/0 pt-6">
-        <div className="mx-auto max-w-3xl px-4 pb-4">
-          {mic.error && <p className="mb-2 text-center text-sm text-care">{mic.error}</p>}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-            className="flex items-end gap-2 rounded-3xl border border-line bg-surface p-2 shadow-lg shadow-black/5"
-          >
-            <button
-              type="button"
-              onClick={toggleMic}
-              disabled={!mic.supported}
-              aria-label={mic.listening ? "Stop listening" : "Speak"}
-              title={mic.supported ? (mic.listening ? "Stop listening" : "Speak instead of typing") : "Voice input works in Chrome, Edge and Safari"}
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-40 ${
-                mic.listening ? "listening bg-care text-white" : "bg-surface-2 text-ink hover:bg-accent-soft"
-              }`}
-            >
-              <MicIcon />
-            </button>
-            <textarea
-              ref={textRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-              rows={1}
-              placeholder={mic.listening ? "Listening… speak freely" : mode === "preacher" ? "Tell me what you're going through…" : "Describe a feeling or the verse you half remember…"}
-              className="max-h-44 min-h-11 flex-1 resize-none bg-transparent px-2 py-2.5 text-[1rem] leading-6 text-ink outline-none placeholder:text-muted"
-            />
-            <button
-              type="submit"
-              disabled={busy || input.trim().length < 2}
-              aria-label="Send"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-30"
-            >
-              <SendIcon />
-            </button>
-          </form>
-          <p className="mt-2 text-center text-xs leading-relaxed text-muted">
-            Scripture is quoted exactly from public-domain Bibles (KJV, BSB, Louis Segond). Teachings are AI-generated:
-            weigh them against the Word, and keep walking with your church family.
+          <p className="mt-14 border-t border-line pt-6 text-[13px] leading-[1.7] text-muted">
+            Scripture is quoted exactly from public-domain Bibles. Teachings are written by AI: weigh them against the Word,
+            and keep walking with your church family.
           </p>
-        </div>
-      </footer>
+        </main>
+      ) : (
+        <>
+          <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-64 pt-8 sm:px-6 md:pb-48">
+            <div className="space-y-12">
+              {entries.map((e) => (
+                <EntryView key={e.id} entry={e} speaker={speaker} voice={voice} music={music} />
+              ))}
+            </div>
+            <div ref={bottomRef} />
+          </main>
+
+          {/* Docked composer */}
+          <div className="fixed inset-x-0 bottom-16 z-20 border-t border-line bg-bg/90 backdrop-blur-md md:bottom-0">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+              className="mx-auto max-w-3xl px-4 pb-3 pt-3 sm:px-6"
+            >
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                {segmented}
+                {styleMenu}
+              </div>
+              <div className="flex items-end gap-2 rounded-[20px] border border-line bg-surface p-2 shadow-float">
+                {micButton}
+                {field(1, "max-h-40 min-h-10 px-1 py-2 text-[16px] leading-6")}
+                <button
+                  type="submit"
+                  disabled={sendDisabled}
+                  aria-label={preacher ? "Receive a word" : "Find verses"}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent text-accent-ink transition duration-150 active:scale-[0.96] disabled:bg-surface-2 disabled:text-muted"
+                >
+                  <SendIcon className="h-[18px] w-[18px]" />
+                </button>
+              </div>
+              {mic.error && <p className="mt-2 text-[13px] text-care">{mic.error}</p>}
+            </form>
+          </div>
+        </>
+      )}
+
+      <TabBar active="word" />
     </div>
   );
 }
+
+const TOPICS = [
+  { title: "Anxious", line: "My mind won't slow down", ask: "I'm anxious and my mind won't slow down. I can't sleep.", Icon: WaveIcon },
+  { title: "Waiting", line: "Nothing is moving yet", ask: "I've been waiting so long and nothing is moving in my life.", Icon: HourglassIcon },
+  { title: "Weary", line: "I have nothing left", ask: "I'm so tired. I work hard and I have nothing left.", Icon: MoonIcon },
+  { title: "Grieving", line: "I lost someone I love", ask: "I lost someone I love and I don't know how to carry this.", Icon: DropIcon },
+  { title: "Starting over", line: "I failed again", ask: "I failed again and I don't know how to start over.", Icon: SunriseIcon },
+  { title: "Thankful", line: "God came through", ask: "God came through for me and I want to thank Him.", Icon: HandsIcon },
+];
+
+const FEATURES = [
+  { href: "/talk", title: "Talk with a pastor", line: "A spoken conversation. Interrupt any time, like you would in person.", Icon: TalkIcon },
+  { href: "/service", title: "Service display", line: "Listens to a sermon and puts every verse on screen as it's read.", Icon: ServiceIcon },
+];
 
 function EntryView({
   entry: e,
@@ -397,73 +521,70 @@ function EntryView({
     const body = e.teaching.replace(/DECLARATION:\s*/i, "");
     return `${e.title ? e.title + ". " : ""}${body}`;
   };
+  const eyebrow = "text-[12px] font-medium uppercase tracking-[0.08em] text-emphasis";
 
   return (
-    <article id={e.id} className="scroll-mt-32 space-y-4">
+    <article id={e.id} className="scroll-mt-24 space-y-5">
       <div className="flex justify-end">
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-surface-2 px-4 py-3 leading-relaxed">{e.message}</p>
+        <p className="max-w-[80%] whitespace-pre-wrap rounded-[16px] bg-surface-2 px-4 py-3 text-[15px] leading-[1.6]">{e.message}</p>
       </div>
 
       {e.status === "loading" && (
-        <p className="caret text-muted">{e.mode === "preacher" ? "Searching the scriptures" : "Searching"}</p>
+        <Skeleton label={e.mode === "preacher" ? (fr ? "Recherche des Écritures" : "Finding scripture") : "Searching the Bible"} />
       )}
 
       {urgent && <CrisisCard resources={e.resources!} />}
 
       {!urgent && e.mode === "scripture" && e.passages.length > 0 && (
-        <div className="space-y-3">
+        <section className="space-y-3">
+          <p className={eyebrow}>{fr ? "Pour toi" : "Scriptures for you"}</p>
           {e.passages.map((p) => (
             <PassageCard key={p.key} passage={p} speaker={speaker} />
           ))}
-        </div>
+        </section>
       )}
 
       {!urgent && e.mode === "preacher" && e.anchor && (
-        <div className="space-y-5 rounded-3xl border border-line bg-surface p-5 sm:p-7">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{STYLES[e.style].label}</p>
-            <h2 className={`mt-1 font-serif text-2xl leading-snug sm:text-3xl ${e.title ? "" : "text-muted"}`}>
-              {e.title ?? (e.status === "streaming" ? "…" : "A word for you")}
-            </h2>
-          </div>
+        <section className="fade-up space-y-6 rounded-[20px] border border-line bg-surface p-5 shadow-card sm:p-8">
+          <header>
+            <p className={eyebrow}>{STYLES[e.style].label}</p>
+            {e.title ? (
+              <h2 className="mt-2 text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] sm:text-[26px]">{e.title}</h2>
+            ) : (
+              <div className="skeleton mt-3 h-7 w-2/3" />
+            )}
+          </header>
           <PassageCard passage={e.anchor} variant="anchor" />
           {audioFirst && e.status === "streaming" && (
-            <p className="caret text-muted">{fr ? "Le prédicateur prépare ta parole" : "The preacher is preparing your word"}</p>
+            <Skeleton lines={2} label={fr ? "Le prédicateur prépare ta parole" : "Writing your word"} />
           )}
           {audioFirst && e.status === "done" && e.teaching && (
             <Player id={teachingId} text={teachingSpeech()} lang={e.lang} voice={voice} onPlayStart={() => music.start()} />
           )}
           {(audioFirst ? showTranscript : e.teaching || e.status === "streaming") && (
-            <TeachingBody text={e.teaching} streaming={e.status === "streaming"} translation={e.translation} />
+            <TeachingBody text={e.teaching} streaming={!audioFirst && e.status === "streaming"} translation={e.translation} />
           )}
           {e.status === "done" && e.teaching && (
-            <div className="flex flex-wrap items-center gap-1 border-t border-line pt-3">
+            <div className="-mx-1 flex flex-wrap items-center gap-1 border-t border-line pt-4">
               {audioFirst ? (
                 <IconButton label={showTranscript ? (fr ? "Masquer le texte" : "Hide transcript") : fr ? "Voir le texte" : "Show transcript"} active={showTranscript} onClick={() => setShowTranscript((v) => !v)}>
                   <TranscriptIcon className="h-4 w-4" />
-                  <span>{showTranscript ? (fr ? "Masquer le texte" : "Hide transcript") : fr ? "Voir le texte" : "Show transcript"}</span>
+                  <span>{showTranscript ? (fr ? "Masquer le texte" : "Hide transcript") : fr ? "Voir le texte" : "Transcript"}</span>
                 </IconButton>
               ) : (
-                <SpeakButton
-                  id={teachingId}
-                  text={teachingSpeech()}
-                  lang={e.lang}
-                  {...speaker}
-                  speak={preach}
-                  label={fr ? "Écouter cette parole" : "Listen to this word"}
-                />
+                <SpeakButton id={teachingId} text={teachingSpeech()} lang={e.lang} {...speaker} speak={preach} label={fr ? "Écouter" : "Listen"} />
               )}
               <IconButton
                 label={music.enabled ? (fr ? "Couper la musique de fond" : "Turn background keys off") : fr ? "Activer la musique de fond" : "Turn background keys on"}
-                active={false}
+                active={music.enabled}
                 onClick={() => {
                   const on = !music.enabled;
                   music.setEnabled(on);
                   if (!on) music.stop();
                 }}
               >
-                <MusicIcon className={`h-4 w-4 ${music.enabled ? "" : "opacity-40"}`} />
-                <span className={music.enabled ? "" : "line-through opacity-60"}>{fr ? "Musique" : "Keys"}</span>
+                <MusicIcon className="h-4 w-4" />
+                <span>{fr ? "Musique" : "Keys"}</span>
               </IconButton>
               <IconButton
                 label="Copy teaching"
@@ -476,32 +597,30 @@ function EntryView({
                 }}
               >
                 {copied ? <CheckIcon className="h-4 w-4" /> : <CopyIcon className="h-4 w-4" />}
-                <span>{e.lang === "fr" ? "Copier" : "Copy"}</span>
+                <span>{copied ? (fr ? "Copié" : "Copied") : fr ? "Copier" : "Copy"}</span>
               </IconButton>
+              {onAir && music.nowPlaying && <span className="ml-auto truncate text-[12px] text-muted">♪ {music.nowPlaying}</span>}
             </div>
           )}
-          {onAir && music.nowPlaying && <p className="text-xs text-muted">♪ {music.nowPlaying}</p>}
           {e.passages.length > 0 && (e.status === "done" || e.status === "error") && (
             <details className="group">
-              <summary className="cursor-pointer list-none text-sm font-medium text-muted hover:text-ink">
-                <span className="group-open:hidden">
-                  {e.lang === "fr" ? "Autres passages" : "More scriptures for this"} ({e.passages.length}) ↓
-                </span>
-                <span className="hidden group-open:inline">{e.lang === "fr" ? "Masquer" : "Hide scriptures"} ↑</span>
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-[14px] font-medium text-muted transition-colors hover:text-ink">
+                <ChevronIcon className="h-4 w-4 transition-transform duration-200 group-open:rotate-180" />
+                {fr ? "Autres passages" : "More scriptures for this"} ({e.passages.length})
               </summary>
-              <div className="mt-3 space-y-3">
+              <div className="mt-4 space-y-3">
                 {e.passages.map((p) => (
                   <PassageCard key={p.key} passage={p} speaker={speaker} />
                 ))}
               </div>
             </details>
           )}
-        </div>
+        </section>
       )}
 
       {!urgent && e.crisis === "concern" && e.resources && e.status !== "loading" && <CrisisCard resources={e.resources} soft lang={e.lang} />}
-      {e.notice && <p className="text-sm text-muted">{e.notice}</p>}
-      {e.error && <p className="rounded-xl bg-surface-2 px-4 py-3 text-sm text-ink">{e.error}</p>}
+      {e.notice && <p className="text-[13px] text-muted">{e.notice}</p>}
+      {e.error && <p className="rounded-[14px] bg-surface-2 px-4 py-3 text-[14px] text-ink">{e.error}</p>}
     </article>
   );
 }

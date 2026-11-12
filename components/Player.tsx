@@ -81,14 +81,14 @@ export function Player(props: {
   const label = s?.status === "playing" ? (fr ? "Pause" : "Pause") : s?.status === "loading" ? (fr ? "Annuler" : "Cancel") : fr ? "Écouter" : "Play";
 
   return (
-    <div className="rounded-2xl border border-line bg-surface-2 p-3 sm:p-4">
+    <div className="rounded-[16px] bg-surface-2 p-3 sm:p-4">
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={main}
           aria-label={label}
           title={label}
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-accent text-accent-ink shadow-md transition-transform active:scale-95"
+          className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-accent text-accent-ink transition duration-150 hover:-translate-y-px hover:shadow-card active:scale-95"
         >
           {s?.status === "loading" ? (
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent-ink/30 border-t-accent-ink" />
@@ -147,14 +147,14 @@ export function Player(props: {
                 <span
                   key={i}
                   className={`flex-1 rounded-full transition-colors ${
-                    played ? "bg-accent" : pendingBar ? "bg-ink/10" : "bg-ink/25"
+                    played ? "bg-accent" : pendingBar ? "bg-ink/10" : "bg-ink/30"
                   } ${pendingBar && (recording || s?.status === "loading") ? "animate-pulse" : ""}`}
                   style={{ height: `${Math.round(Math.abs(b) * 100)}%`, minHeight: 3 }}
                 />
               );
             })}
           </div>
-          <div className="mt-1 flex justify-between text-xs tabular-nums text-muted">
+          <div className="mt-1 flex justify-between text-[12px] font-medium tabular-nums text-muted">
             <span>
               {s?.status === "loading"
                 ? s.position > 0.5

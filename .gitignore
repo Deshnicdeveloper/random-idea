@@ -10,3 +10,7 @@ voice-samples
 voice-service/.venv
 voice-service/models
 __pycache__
+
+# Bible data: downloaded and built by `npm run setup`
+data/raw/
+data/bible.json

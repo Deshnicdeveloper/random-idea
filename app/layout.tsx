@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", axes: ["opsz"] });
+const poppins = Poppins({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-poppins" });
 
 export const metadata: Metadata = {
   title: "Selah",
@@ -13,9 +12,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f3ec" },
-    { media: "(prefers-color-scheme: dark)", color: "#100e17" },
+    { media: "(prefers-color-scheme: light)", color: "#f9f2e7" },
+    { media: "(prefers-color-scheme: dark)", color: "#102040" },
   ],
 };
 
@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     // suppressHydrationWarning: browser extensions (Grammarly, LanguageTool, ColorZilla...) add
     // attributes to <html>/<body> before React loads. This only silences those two tags.
-    <html lang="en" className={`${inter.variable} ${fraunces.variable}`} suppressHydrationWarning>
+    <html lang="en" className={poppins.variable} suppressHydrationWarning>
       <body className="font-sans" suppressHydrationWarning>
         {children}
       </body>

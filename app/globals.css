@@ -1,49 +1,61 @@
 @import "tailwindcss";
 
+/* Selah design tokens (see docs/DESIGN.md). Palette: Midnight #102040, Slate #2C4368, Gold #E0C07A, Cream #F9F2E7. */
+
 :root {
-  --bg: #f7f3ec;
-  --surface: #fffdf8;
-  --surface-2: #f1ebe0;
-  --border: #e3dacb;
-  --text: #221d16;
-  --muted: #6e6557;
-  --accent: #94661c;
-  --accent-soft: #f3e3c3;
-  --accent-ink: #ffffff;
-  --care: #9b3d4a;
-  --care-soft: #f8e4e4;
+  --bg: #f9f2e7;
+  --surface: #fffcf7;
+  --surface-2: #f1e7d6;
+  --border: rgb(16 32 64 / 0.1);
+  --text: #102040;
+  --muted: #5f6f88;
+  --accent: #e0c07a;
+  --accent-soft: #f0e0c1;
+  --accent-ink: #102040;
+  --emphasis: #2c4368;
+  --care: #a34a3b;
+  --care-soft: #f6e1da;
+  --shadow-1: 0 1px 2px rgb(16 32 64 / 0.06);
+  --shadow-2: 0 12px 32px -12px rgb(16 32 64 / 0.22);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #100e17;
-    --surface: #18151f;
-    --surface-2: #211d2b;
-    --border: #2d2839;
-    --text: #ede7dc;
-    --muted: #a69fb1;
-    --accent: #e2b45c;
-    --accent-soft: #3a2f1c;
-    --accent-ink: #1b1408;
-    --care: #f2a0a8;
-    --care-soft: #3a1f26;
+    --bg: #102040;
+    --surface: #17294a;
+    --surface-2: #2c4368;
+    --border: rgb(249 242 231 / 0.1);
+    --text: #f9f2e7;
+    --muted: rgb(249 242 231 / 0.68);
+    --accent: #e0c07a;
+    --accent-soft: rgb(224 192 122 / 0.14);
+    --accent-ink: #102040;
+    --emphasis: #e0c07a;
+    --care: #e79b88;
+    --care-soft: rgb(231 155 136 / 0.12);
+    --shadow-1: none;
+    --shadow-2: 0 12px 32px -12px rgb(0 0 0 / 0.45);
     color-scheme: dark;
   }
 }
 
-:root[data-theme="dark"] {
-  --bg: #100e17;
-  --surface: #18151f;
-  --surface-2: #211d2b;
-  --border: #2d2839;
-  --text: #ede7dc;
-  --muted: #a69fb1;
-  --accent: #e2b45c;
-  --accent-soft: #3a2f1c;
-  --accent-ink: #1b1408;
-  --care: #f2a0a8;
-  --care-soft: #3a1f26;
+:root[data-theme="dark"],
+.theme-night {
+  --bg: #102040;
+  --surface: #17294a;
+  --surface-2: #2c4368;
+  --border: rgb(249 242 231 / 0.1);
+  --text: #f9f2e7;
+  --muted: rgb(249 242 231 / 0.68);
+  --accent: #e0c07a;
+  --accent-soft: rgb(224 192 122 / 0.14);
+  --accent-ink: #102040;
+  --emphasis: #e0c07a;
+  --care: #e79b88;
+  --care-soft: rgb(231 155 136 / 0.12);
+  --shadow-1: none;
+  --shadow-2: 0 12px 32px -12px rgb(0 0 0 / 0.45);
   color-scheme: dark;
 }
 
@@ -57,10 +69,12 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-emphasis: var(--emphasis);
   --color-care: var(--care);
   --color-care-soft: var(--care-soft);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: var(--shadow-1);
+  --shadow-float: var(--shadow-2);
 }
 
 html,
@@ -71,10 +85,17 @@ body {
 
 body {
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga" 1;
 }
 
-.glow {
-  background: radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%);
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -84,20 +105,47 @@ body {
   scrollbar-width: none;
 }
 
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--care) 45%, transparent); }
-  100% { box-shadow: 0 0 0 12px transparent; }
+/* Mic / orb listening ring */
+@keyframes ring {
+  0% { box-shadow: 0 0 0 0 rgb(224 192 122 / 0.5); }
+  100% { box-shadow: 0 0 0 14px rgb(224 192 122 / 0); }
 }
 .listening {
-  animation: pulse-ring 1.2s ease-out infinite;
+  animation: ring 1.4s ease-out infinite;
 }
 
-@keyframes caret {
-  50% { opacity: 0; }
+/* Loading skeleton */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
 }
-.caret::after {
-  content: "▍";
-  margin-left: 2px;
-  color: var(--accent);
-  animation: caret 1s steps(1) infinite;
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in oklab, var(--surface-2) 55%, var(--bg)) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* New content */
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up {
+  animation: fadein 250ms ease-out both;
+}
+
+/* Thinking arc (Talk) */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
