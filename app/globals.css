@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f3ec;
+  --surface: #fffdf8;
+  --surface-2: #f1ebe0;
+  --border: #e3dacb;
+  --text: #221d16;
+  --muted: #6e6557;
+  --accent: #94661c;
+  --accent-soft: #f3e3c3;
+  --accent-ink: #ffffff;
+  --care: #9b3d4a;
+  --care-soft: #f8e4e4;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #100e17;
+    --surface: #18151f;
+    --surface-2: #211d2b;
+    --border: #2d2839;
+    --text: #ede7dc;
+    --muted: #a69fb1;
+    --accent: #e2b45c;
+    --accent-soft: #3a2f1c;
+    --accent-ink: #1b1408;
+    --care: #f2a0a8;
+    --care-soft: #3a1f26;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #100e17;
+  --surface: #18151f;
+  --surface-2: #211d2b;
+  --border: #2d2839;
+  --text: #ede7dc;
+  --muted: #a69fb1;
+  --accent: #e2b45c;
+  --accent-soft: #3a2f1c;
+  --accent-ink: #1b1408;
+  --care: #f2a0a8;
+  --care-soft: #3a1f26;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-care: var(--care);
+  --color-care-soft: var(--care-soft);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+.glow {
+  background: radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--care) 45%, transparent); }
+  100% { box-shadow: 0 0 0 12px transparent; }
+}
+.listening {
+  animation: pulse-ring 1.2s ease-out infinite;
+}
+
+@keyframes caret {
+  50% { opacity: 0; }
+}
+.caret::after {
+  content: "▍";
+  margin-left: 2px;
+  color: var(--accent);
+  animation: caret 1s steps(1) infinite;
+}
